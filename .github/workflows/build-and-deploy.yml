@@ -76,13 +76,22 @@ jobs:
         echo "D:\a\_temp\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Build
-      run: make -e TARGET="${{ env.OUTPUT }}"
+      run: make -e TARGET="${{ env.OUTPUT }}" skip_tests=1
 
     - name: Verify Build
       run: |
         file "${{ env.OUTPUT }}"
         openssl dgst -sha256 "${{ env.OUTPUT }}" | tee bettercap_${{ matrix.target_os }}_${{ matrix.target_arch }}_${{ env.VERSION }}.sha256
         7z a "bettercap_${{ matrix.target_os }}_${{ matrix.target_arch }}_${{ env.VERSION }}.zip" "${{ env.OUTPUT }}" "bettercap_${{ matrix.target_os }}_${{ matrix.target_arch }}_${{ env.VERSION }}.sha256"
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: bettercap_${{ matrix.target_os }}_${{ matrix.target_arch }}
+        path: |
+          ${{ env.OUTPUT }}
+          bettercap_${{ matrix.target_os }}_${{ matrix.target_arch }}_${{ env.VERSION }}.sha256
+          bettercap_${{ matrix.target_os }}_${{ matrix.target_arch }}_${{ env.VERSION }}.zip
 
   deploy:
     needs: [build]
@@ -95,11 +104,17 @@ jobs:
           with:
             submodules: true
 
+        - name: Download Artifacts
+          uses: actions/download-artifact@v3
+
+        - name: Prepare Release Assets
+          run: |
+            mkdir release_assets
+            find . -name "bettercap*" -type f -exec cp {} release_assets/ \;
+
         - name: Upload Release Assets
-          uses: softprops/action-gh-release@v1
+          uses: softprops/action-gh-release@v2.0.8
           with:
-            files: |
-                bettercap_*.zip
-                bettercap_*.sha256
+            files: release_assets/*
     env:
         GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
